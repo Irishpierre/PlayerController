@@ -1,91 +1,72 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class PlayerMovement : MonoBehaviour
 {
-    //Ref to InputHandler script as variable
-    private InputHandler _input;
-    //MoveSpeed variable
-    [SerializeField] private float moveSpeed;
-    //Reference to our camera...Helps in Isometric games
-    [SerializeField] private Camera _camera;
-    //Rotate speed field
-    [SerializeField] private float rotateSpeed;
-    //Rotate Toward Mouse check
-    [SerializeField] private bool rotateTowardMouse;
+    //Ref InputManager
+    InputManager inputManager;
+
+    //Ref variables
+    Vector3 moveDirection;
+    Transform cameraObject;
+    Rigidbody playerRb;
+
+    public float movementSpeed = 7.0f;
+    public float rotationSpeed = 15.0f;
 
     private void Awake()
     {
-        //Allowed access to component InputHandler
-        _input = GetComponent<InputHandler>();
+        inputManager = GetComponent<InputManager>();
+        playerRb = GetComponent<Rigidbody>();
+        cameraObject = Camera.main.transform;
     }
 
-    // Update is called once per frame
-    void Update()
+
+
+    public void HandleAllMovement()
     {
-        var targetVector = new Vector3(_input.InputVector.x, 0, _input.InputVector.y);
-
-        //Move in the direction we're aiming
-        var movementVector = MoveTowardTarget(targetVector);
-
-
-        //Rotate in direction we're traveling
-        RotateTowardMovementVector(movementVector);
-
-        if(!rotateTowardMouse)
-        {
-            RotateTowardMovementVector(movementVector);
-        }
-        else
-        {
-            RotateTowardMouseVector();
-        }
-
-    }
-
-    private void RotateTowardMouseVector()
-    {
-        //Raycast to location of mouse arrow for ref
-        Ray ray = _camera.ScreenPointToRay(_input.MousePosition);
-
-        //Know when ray hits
-        if (Physics.Raycast(ray, out RaycastHit hitInfo, maxDistance: 300f))
-        {
-            var target = hitInfo.point;
-            target.y = transform.position.y; //This stops us from accidently looking up
-            transform.LookAt(target);
-        }
-
-        
-    }
-
-    private void RotateTowardMovementVector(Vector3 movementVector)
-    {
-
-        //Check so we don't rotate back to 0,0 when key isnt pressed
-
-        if(movementVector.magnitude == 0) { return; }
-
-        //Method Quaternion to local rotate. Creates rotation based off of rotate from inputs relative to camera
-        var rotation = Quaternion.LookRotation(movementVector);
-        transform.rotation = Quaternion.RotateTowards(transform.rotation, rotation, rotateSpeed);
-    }
-
-    private Vector3 MoveTowardTarget(Vector3 targetVector)
-    {
-        //Define our speed. Time.deltaTime helps smooth movement
-        var speed = moveSpeed * Time.deltaTime;
-
-        //Movement and rotation seperate from camera rotate
-        //Use Eueler Angles (3D angles in X, Y Z) with Quaternion (imaginary angles)
-        targetVector = Quaternion.Euler(0, _camera.gameObject.transform.eulerAngles.y, 0) * targetVector;
-
-        //Target position
-        var targetPos = transform.position + targetVector * speed;
-        transform.position = targetPos;
-        return targetVector;
+        HandleMovement();
+        HandleRotation();
     }
     
+    
+    //Move
+    private void HandleMovement()
+    {
+        //Camera control with our movement
+        moveDirection = cameraObject.forward * inputManager.verticalInput;
+        moveDirection = moveDirection + cameraObject.right * inputManager.horizontalInput;
+        moveDirection.Normalize(); //Round to 1
+        moveDirection.y = 0; //Stops us walking into the air
+        moveDirection = moveDirection * movementSpeed;
+
+
+        Vector3 movementVelocity = moveDirection;
+        playerRb.velocity = movementVelocity; //move our player based on the equation we just made
+    }
+
+    //Rotate
+
+    private void HandleRotation()
+    {
+        Vector3 targetDirection = Vector3.zero;
+        //Always face the direction you're about to run
+        targetDirection = cameraObject.forward * inputManager.verticalInput;
+        targetDirection = targetDirection + cameraObject.right * inputManager.horizontalInput;
+        targetDirection.Normalize();
+        targetDirection.y = 0;
+
+        //Stops snap rotate
+        if (targetDirection == Vector3.zero)
+            targetDirection = transform.forward;
+
+        //Calculate rotations
+        Quaternion targetRotation = Quaternion.LookRotation(targetDirection);
+        //Rotation point between A and B
+        Quaternion playerRotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+
+        transform.rotation = playerRotation;
+    }
+
 }
